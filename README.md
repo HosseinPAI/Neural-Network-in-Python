@@ -16,7 +16,7 @@ There are two different models in this project:
 
 Both networks have been trained on [Fashion MNIST](https://drive.google.com/drive/folders/1_kOFBd-MQY6NJhn5qU1pMLIj1ngTDqTL?usp=sharing) dataset, and you can download it from the below link. After downloading the dataset, you should put CSV files into Dataset folders and then run main.py to see the results. 
 <p align="justify">
-In params.py, you can find all parameters used in projects and change them to see the effects of various parameters on training and testing models.
+In params.py, you can find all parameters used in the project and change them to see the effects of various parameters on training and testing models.
 </p>
 <p align="justify">
 In the Save_result folder, you can find figures related to loss and accuracy values during training.
