@@ -1,0 +1,187 @@
+"""
+Created on Mon Mar 16 21:44:13 2020
+
+@author: MrHossein
+"""
+import numpy as np
+
+
+class Nueral_net(object):
+
+    # input_feature_size   : the Size of input features, for exmple, it is 784 for Fashion MNIST
+    # num_of_hidden_layers : The Number of Hidden Layyers thet you want to make, for example = 3
+    # size_of_each_layer   : The size of each hidden layer in neural net.It should be like a list : [12,15,10]
+    # output_size          : The size of output classification. for example, it is 10 for Fashion MNIST
+
+    # -----------------------------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------
+    def __init__(self, input_feature_size, num_of_hidden_layers, size_of_each_layer, output_size, std=0.001):
+
+        self.total_layer = len(size_of_each_layer) + 2
+        self.total_layer_size = [input_feature_size] + size_of_each_layer + [output_size]
+        self.out_size = output_size
+        self.num_of_hidden_layers = num_of_hidden_layers
+
+        self.Bs = []
+        self.dBs = []
+        self.delta_Bs = []
+        for i in range(self.total_layer - 1):
+            self.Bs.append(np.zeros((self.total_layer_size[i + 1], 1)))
+            self.dBs.append(np.zeros((self.total_layer_size[i + 1], 1)))
+            self.delta_Bs.append(np.zeros((self.total_layer_size[i + 1], 1)))
+
+        self.Ws = []
+        self.dWs = []
+        self.delta_Ws = []
+        for i in range(self.total_layer - 1):
+            self.Ws.append(std * np.random.randn(self.total_layer_size[i + 1], self.total_layer_size[i]))
+            self.dWs.append(np.zeros((self.total_layer_size[i + 1], self.total_layer_size[i])))
+            self.delta_Ws.append(np.zeros((self.total_layer_size[i + 1], self.total_layer_size[i])))
+
+    # -----------------------------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------
+    def relu(self, X, derivative=False):
+        if derivative:
+            return 1.0 * (X > 0)
+        return np.maximum(0, X)
+
+    # -----------------------------------------------------------------------------------------------------------
+    # Calculate Loss and Gradient during Training
+    # -----------------------------------------------------------------------------------------------------------
+    def LG_function(self, X, true_out_index=None, lamda=0, validatian=False):
+
+        # ------------------------------------------------
+        #                 Forward Pass
+        # ------------------------------------------------
+        Zs = []
+        As = []
+        As.append(X)
+        for i in range(self.total_layer - 1):
+            Zs.append(np.dot(self.Ws[i], As[i]) + self.Bs[i])
+            if (i != (self.total_layer - 2)):
+                As.append(self.relu(Zs[i]))
+
+        scores = Zs[i]
+
+        if true_out_index is None:
+            return scores
+        # ------------------------------------------------
+        #               Calculate Hinge Loss
+        # ------------------------------------------------
+        true_out_index = np.array(true_out_index)
+        offset = np.zeros((self.out_size, len(true_out_index)))
+        offset[true_out_index, np.arange(0, len(true_out_index))] = 1
+        offset = -1 * offset + 1
+        mask_scores = np.ones(scores.shape) * scores[true_out_index, np.arange(0, scores.shape[1])]
+        Loss_matrix = scores - mask_scores + offset
+        Loss_matrix[Loss_matrix < 0] = 0
+        Hing_Loss = np.sum(Loss_matrix) / X.shape[1]
+        # Calculate Regularization
+        Reg_sum = 0
+        for i in range(self.total_layer - 1):
+            Reg_sum += np.sum(np.square(self.Ws[i]))
+        Reg_term = 0.5 * lamda * Reg_sum
+        # Calculate Total Loss
+        total_loss = Hing_Loss + Reg_term
+
+        if validatian == True:
+            return total_loss
+        # ------------------------------------------------
+        #           Calculate Gradian
+        # ------------------------------------------------
+        # Claculate Gradiant of Last Layer (Hinge Loss)
+        Loss_matrix[Loss_matrix > 0] = 1
+        Loss_matrix[true_out_index, np.arange(0, scores.shape[1])] = -1 * np.sum(Loss_matrix, axis=0)
+        self.dWs[-1] = ((np.dot(Loss_matrix, As[-1].T)) / X.shape[1]) + lamda * self.Ws[-1]
+        self.dBs[-1] = (np.dot(Loss_matrix, np.ones((X.shape[1], 1)))) / X.shape[1]
+        # Claculate Gradiant for ather layes
+        delta = Loss_matrix
+        for i in range(self.total_layer - 2):
+            temp = Zs[-(i + 2)]
+            f_prime = self.relu(temp, derivative=True)
+            delta = np.dot(self.Ws[-(i + 1)].T, delta) * f_prime
+            self.dBs[-(i + 2)] = np.dot(delta, np.ones((X.shape[1], 1)))
+            self.dWs[-(i + 2)] = np.dot(delta, As[-(i + 2)].T)
+
+        return total_loss, self.dWs, self.dBs
+
+    # -----------------------------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------
+    def train_function(self, X_train, y_train, X_valid, y_valid, learning_rate=1e-3, learning_rate_decay=0.95,
+                       momentum=0.95, batch_size=128, reg=1e-5, num_of_iters=100):
+
+        num_of_log_data = 100
+        log_point = int(num_of_iters / num_of_log_data)
+        if log_point == 0:
+            log_point = 1
+
+        num_of_train_data = X_train.shape[1]
+
+        train_data_loss = []
+        valid_data_loss = []
+        train_data_acc = []
+        valid_data_acc = []
+
+        counter = 0
+        cmp = num_of_iters / 50
+        print('\nTraining Neural Network is started, Please wait !!!')
+        for i in range(num_of_iters):
+            counter += 1
+            if counter % cmp == 0:
+                print('.', end='')
+
+            batch_data = None
+            batch_label = None
+
+            # Choose random data from validation data to calculate Loss
+            if i % log_point == 0:
+                rand_mask = np.random.permutation(X_valid.shape[1])
+                batch_data = X_valid[:, rand_mask[:batch_size]]
+                batch_label = y_valid[rand_mask[:batch_size]]
+                loss = self.LG_function(batch_data, true_out_index=batch_label, lamda=reg, validatian=True)
+                valid_data_loss.append(loss)
+
+            # Choose random data from input based on batch size to train NN
+            rand_mask = np.random.permutation(num_of_train_data)
+            batch_data = X_train[:, rand_mask[:batch_size]]
+            batch_label = y_train[rand_mask[:batch_size]]
+
+            # calculate loss and gradients
+            loss, dws, dbs = self.LG_function(batch_data, true_out_index=batch_label, lamda=reg, validatian=False)
+            if i % log_point == 0:
+                train_data_loss.append(loss)
+
+            for j in range(self.total_layer - 1):
+                self.delta_Ws[j] = momentum * self.delta_Ws[j] - learning_rate * dws[j]
+                self.Ws[j] += self.delta_Ws[j] - learning_rate * reg * self.Ws[j]
+
+                self.delta_Bs[j] = momentum * self.delta_Bs[j] - learning_rate * dbs[j]
+                self.Bs[j] += self.delta_Bs[j] - learning_rate * reg * self.Bs[j]
+
+            # if i % 200 == 0:
+            #    print('iteration %d / %d: loss = %f   Learning Rate = %s' % (i, num_of_iters, loss, learning_rate))
+
+            if i % log_point == 0:
+                # Check accuracy
+                train_data_acc.append((self.predict(batch_data) == batch_label).mean())
+                valid_data_acc.append((self.predict(X_valid) == y_valid).mean())
+                learning_rate *= learning_rate_decay
+
+        print('\nTraining Neural Network is Finished. You can see the results. :)\n')
+        return train_data_loss, valid_data_loss, train_data_acc, valid_data_acc
+
+    # -----------------------------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------
+    def predict(self, X):
+        y_prediction = None
+        y_prediction = np.argmax(self.LG_function(X), axis=0)
+
+        return y_prediction
+
+    # -----------------------------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------
+    def Test_function(self, X_test, y_test):
+        return (self.predict(X_test) == y_test).mean()
+
+
+
