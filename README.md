@@ -4,7 +4,7 @@ This project is a python code without using any prepared library such as Pytorch
 </p>
 
 There are two different models in this project:
-* A simple neural network with optional hidden layers with Hing Loss and Relu activation function.
+* A simple neural network with optional hidden layers, Hing Loss and Relu activation function.
 * A Gaussian RBF neural network with optional hidden layers, a specific loss based on the below paper, and GeLu activation function.
 <br />https://arxiv.org/abs/1812.03190
 
